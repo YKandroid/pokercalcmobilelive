@@ -1,4 +1,4 @@
-# Poker Game Calculator 02.05.2025
+# Poker Game Calculator 03.05.2025
 
 A web-based poker cash game settlement calculator that helps track player buy-ins, rebuys, and automatically calculates settlements.
 

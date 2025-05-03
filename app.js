@@ -401,10 +401,175 @@ function updateGameHistoryList() {
             </div>
             <div class="game-actions">
                 <button class="btn" onclick="loadGameFromHistory('${game.date}')">Load</button>
+                <button class="btn" onclick="saveGameToExcel('${game.date}')" style="background-color: #28a745;">
+                    <i class="fas fa-file-excel"></i> Save to Excel
+                </button>
                 <button class="btn" onclick="deleteGameFromHistory('${game.date}')" style="background-color: #dc3545;">Delete</button>
             </div>
         `;
         list.appendChild(div);
+    });
+
+    // Add game statistics section
+    const statsDiv = document.createElement('div');
+    statsDiv.style.marginTop = '30px';
+    statsDiv.innerHTML = `
+        <h3>Game Statistics</h3>
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <div class="input-group">
+                <label for="playerFilter">Filter by Player:</label>
+                <select id="playerFilter" onchange="updateGameStatistics()" style="width: 200px;">
+                    <option value="">All Players</option>
+                </select>
+            </div>
+            <div style="display: flex; gap: 10px; align-items: flex-end;">
+                <button class="btn" onclick="exportGameStats()" style="background-color: #28a745;">
+                    <i class="fas fa-file-excel"></i> Export Stats
+                </button>
+                <button class="btn" onclick="document.getElementById('importStatsFile').click()" style="background-color: #17a2b8;">
+                    <i class="fas fa-file-import"></i> Import Stats
+                </button>
+                <input type="file" id="importStatsFile" accept=".xlsx,.xls" style="display: none;" onchange="importGameStats(event)">
+            </div>
+        </div>
+        <div style="overflow-x: auto;">
+            <table style="width: 100%; border-collapse: collapse; margin-top: 10px; border: 1px solid var(--text-color);">
+                <thead>
+                    <tr style="background-color: var(--button-background); color: white;">
+                        <th style="padding: 10px; text-align: left; border: 1px solid var(--text-color);">Player Name</th>
+                        <th style="padding: 10px; text-align: left; border: 1px solid var(--text-color);">Game Name</th>
+                        <th style="padding: 10px; text-align: right; border: 1px solid var(--text-color);">Game Score</th>
+                        <th style="padding: 10px; text-align: right; border: 1px solid var(--text-color);">Total Investment</th>
+                        <th style="padding: 10px; text-align: right; border: 1px solid var(--text-color);">Total Win</th>
+                        <th style="padding: 10px; text-align: right; border: 1px solid var(--text-color);">Balance</th>
+                    </tr>
+                </thead>
+                <tbody id="gameStatsTableBody">
+                </tbody>
+            </table>
+        </div>
+    `;
+    list.appendChild(statsDiv);
+
+    // Update player filter dropdown
+    updatePlayerFilter();
+    // Calculate and display statistics
+    updateGameStatistics();
+}
+
+function updatePlayerFilter() {
+    const playerFilter = document.getElementById('playerFilter');
+    const uniquePlayers = new Set();
+    
+    // Collect all unique players from game history
+    gameHistory.forEach(game => {
+        game.players.forEach(player => {
+            uniquePlayers.add(player.playerId);
+        });
+    });
+    
+    // Sort players by name
+    const sortedPlayers = Array.from(uniquePlayers)
+        .map(playerId => {
+            const player = players.find(p => p.id === playerId);
+            return { id: playerId, name: player ? player.name : 'Unknown Player' };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name));
+    
+    // Update dropdown options
+    playerFilter.innerHTML = '<option value="">All Players</option>';
+    sortedPlayers.forEach(player => {
+        const option = document.createElement('option');
+        option.value = player.id;
+        option.textContent = player.name;
+        playerFilter.appendChild(option);
+    });
+}
+
+function updateGameStatistics() {
+    const tableBody = document.getElementById('gameStatsTableBody');
+    const playerFilter = document.getElementById('playerFilter');
+    const selectedPlayerId = playerFilter.value;
+    
+    tableBody.innerHTML = '';
+
+    // Create a map to store player statistics
+    const playerStats = new Map();
+
+    // Process each game in history
+    gameHistory.forEach(game => {
+        game.players.forEach(player => {
+            // Skip if player filter is active and this isn't the selected player
+            if (selectedPlayerId && player.playerId !== selectedPlayerId) {
+                return;
+            }
+
+            const totalInvestment = player.buyIn + player.rebuys.reduce((sum, rebuy) => sum + rebuy, 0);
+            const gameScore = player.finalChips - totalInvestment;
+            
+            if (!playerStats.has(player.playerId)) {
+                playerStats.set(player.playerId, {
+                    name: player.name,
+                    games: [],
+                    totalGames: 0,
+                    totalWins: 0,
+                    totalLosses: 0,
+                    totalInvestment: 0,
+                    totalBalance: 0
+                });
+            }
+            
+            const stats = playerStats.get(player.playerId);
+            stats.games.push({
+                gameName: game.name,
+                gameScore: gameScore,
+                totalInvestment: totalInvestment,
+                totalWin: Math.max(0, gameScore),
+                balance: gameScore
+            });
+            
+            // Update cumulative stats
+            stats.totalGames++;
+            if (gameScore > 0) stats.totalWins++;
+            else if (gameScore < 0) stats.totalLosses++;
+            stats.totalInvestment += totalInvestment;
+            stats.totalBalance += gameScore;
+        });
+    });
+
+    // Sort players by name
+    const sortedPlayers = Array.from(playerStats.values()).sort((a, b) => a.name.localeCompare(b.name));
+
+    // Add rows to the table
+    sortedPlayers.forEach(player => {
+        player.games.forEach(game => {
+            const row = document.createElement('tr');
+            row.style.borderBottom = '1px solid var(--text-color)';
+            row.innerHTML = `
+                <td style="padding: 10px; border: 1px solid var(--text-color);">${player.name}</td>
+                <td style="padding: 10px; border: 1px solid var(--text-color);">${game.gameName}</td>
+                <td style="padding: 10px; text-align: right; border: 1px solid var(--text-color); color: ${game.gameScore >= 0 ? '#28a745' : '#dc3545'}">₪${game.gameScore.toFixed(2)}</td>
+                <td style="padding: 10px; text-align: right; border: 1px solid var(--text-color);">₪${game.totalInvestment.toFixed(2)}</td>
+                <td style="padding: 10px; text-align: right; border: 1px solid var(--text-color); color: #28a745">₪${game.totalWin.toFixed(2)}</td>
+                <td style="padding: 10px; text-align: right; border: 1px solid var(--text-color); color: ${game.balance >= 0 ? '#28a745' : '#dc3545'}">₪${game.balance.toFixed(2)}</td>
+            `;
+            tableBody.appendChild(row);
+        });
+
+        // Add summary row for the player if filtered
+        if (selectedPlayerId) {
+            const summaryRow = document.createElement('tr');
+            summaryRow.style.borderTop = '2px solid var(--text-color)';
+            summaryRow.style.fontWeight = 'bold';
+            summaryRow.innerHTML = `
+                <td style="padding: 10px; border: 1px solid var(--text-color);" colspan="2">${player.name} - Summary</td>
+                <td style="padding: 10px; text-align: right; border: 1px solid var(--text-color);">${player.totalWins}W / ${player.totalLosses}L</td>
+                <td style="padding: 10px; text-align: right; border: 1px solid var(--text-color);">₪${player.totalInvestment.toFixed(2)}</td>
+                <td style="padding: 10px; text-align: right; border: 1px solid var(--text-color); color: #28a745">₪${player.games.reduce((sum, g) => sum + g.totalWin, 0).toFixed(2)}</td>
+                <td style="padding: 10px; text-align: right; border: 1px solid var(--text-color); color: ${player.totalBalance >= 0 ? '#28a745' : '#dc3545'}">₪${player.totalBalance.toFixed(2)}</td>
+            `;
+            tableBody.appendChild(summaryRow);
+        }
     });
 }
 
@@ -838,7 +1003,8 @@ function updateGamePlayersList() {
             </div>
             <div>
                 <button class="btn" onclick="editGamePlayer('${player.playerId}')">Edit</button>
-                <button class="btn" onclick="addRebuy('${player.playerId}')">Add Rebuy</button>
+                <button class="btn" onclick="quickRebuy('${player.playerId}', ${player.buyIn})" style="background-color: #28a745;">Quick Rebuy (₪${player.buyIn})</button>
+                <button class="btn" onclick="addRebuy('${player.playerId}')">Custom Rebuy</button>
                 <button class="btn" onclick="removePlayerFromGame('${player.playerId}')" style="background-color: #dc3545;">Remove</button>
             </div>
         `;
@@ -993,13 +1159,20 @@ function updateSettlementSummary() {
     const summaryDiv = document.getElementById('settlementSummary');
     let totalBuyIn = 0;
     let totalRebuys = 0;
+    let totalChips = 0;
     
     currentGame.players.forEach(player => {
         totalBuyIn += player.buyIn;
         totalRebuys += player.rebuys.reduce((sum, rebuy) => sum + rebuy, 0);
+        if (player.finalChips !== undefined && player.finalChips !== null) {
+            totalChips += player.finalChips;
+        }
     });
     
     const total = totalBuyIn + totalRebuys;
+    
+    // Get the current chip value from localStorage or default to 1
+    const chipValue = parseFloat(localStorage.getItem('chipValue')) || 1;
     
     summaryDiv.innerHTML = `
         <h3>Game Summary</h3>
@@ -1007,7 +1180,8 @@ function updateSettlementSummary() {
             <div>
                 <strong>Total Buy-ins:</strong> ₪${totalBuyIn.toFixed(2)}<br>
                 <strong>Total Rebuys:</strong> ₪${totalRebuys.toFixed(2)}<br>
-                <strong>Total in Play:</strong> ₪${total.toFixed(2)}
+                <strong>Total in Play:</strong> ₪${total.toFixed(2)}<br>
+                <strong>Total Chips:</strong> ${totalChips.toFixed(0)} chips (₪${(totalChips * chipValue).toFixed(2)})
             </div>
             <div>
                 <strong>Number of Players:</strong> ${currentGame.players.length}<br>
@@ -1015,7 +1189,29 @@ function updateSettlementSummary() {
                 <strong>Average Rebuys:</strong> ₪${(totalRebuys / currentGame.players.length).toFixed(2)}
             </div>
         </div>
+        <div style="margin-top: 15px; padding: 10px; background-color: #f8f9fa; border-radius: 4px;">
+            <strong>Chip Value Converter:</strong><br>
+            <div style="display: flex; align-items: center; gap: 10px; margin-top: 5px;">
+                <input type="number" 
+                       id="chipValueInput" 
+                       value="${chipValue}" 
+                       min="0.01" 
+                       step="0.01" 
+                       style="width: 80px;"
+                       onchange="updateChipValue(this.value)">
+                <span>₪ per chip</span>
+            </div>
+        </div>
     `;
+}
+
+// Add new function to handle chip value updates
+function updateChipValue(value) {
+    const chipValue = parseFloat(value);
+    if (!isNaN(chipValue) && chipValue > 0) {
+        localStorage.setItem('chipValue', chipValue);
+        updateSettlementSummary();
+    }
 }
 
 function saveGameToHistory() {
@@ -1532,207 +1728,6 @@ function proceedWithSettlement(netPositions) {
 translations.en.captureSnapshot = 'Capture Snapshot';
 translations.he.captureSnapshot = 'צלם תמונה';
 
-// Add the html2canvas library to the head of the document
-const html2canvasScript = document.createElement('script');
-html2canvasScript.src = 'https://html2canvas.hertzen.com/dist/html2canvas.min.js';
-document.head.appendChild(html2canvasScript);
-
-// ... existing code ...
-
-function captureSettlementSnapshot() {
-    try {
-        const settlementSection = document.getElementById('settlementResults');
-        if (!settlementSection) {
-            alert('No settlement section found to capture');
-            return;
-        }
-
-        // Add a temporary class for better styling during capture
-        settlementSection.classList.add('capturing');
-        
-        // Configure html2canvas options
-        const options = {
-            backgroundColor: '#ffffff',
-            scale: 2, // Higher quality
-            useCORS: true,
-            logging: false,
-            removeContainer: true
-        };
-
-        html2canvas(settlementSection, options).then(canvas => {
-            // Remove the temporary class
-            settlementSection.classList.remove('capturing');
-            
-            // Convert the canvas to a data URL
-            const imgData = canvas.toDataURL('image/png');
-            
-            // Create a download link
-            const link = document.createElement('a');
-            link.download = `poker-settlement-${new Date().toISOString().split('T')[0]}.png`;
-            link.href = imgData;
-            
-            // Trigger the download
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }).catch(error => {
-            console.error('Error capturing settlement:', error);
-            settlementSection.classList.remove('capturing');
-            alert('Failed to capture settlement. Please try again.');
-        });
-    } catch (error) {
-        console.error('Error in captureSettlementSnapshot:', error);
-        alert('Error capturing settlement. Please try again.');
-    }
-}
-
-// Update the settlement display to include the snapshot button
-function proceedWithSettlement(netPositions) {
-    try {
-        // ... existing code ...
-
-        // Update the container HTML to include the snapshot button
-        const container = document.getElementById('settlementResults');
-        container.innerHTML = `
-            <div style="margin-bottom: 20px;">
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
-                    <div style="background-color: #e3f2fd; padding: 15px; border-radius: 8px; border: 1px solid #bbdefb;">
-                        <h3 style="color: #1565c0; margin-bottom: 15px; text-align: center;">
-                            <i class="fas fa-gamepad" style="margin-right: 8px;"></i>${translations[currentLanguage].currentGame}
-                        </h3>
-                        <div style="background-color: white; padding: 12px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <div style="font-weight: bold; color: #1565c0; margin-bottom: 10px;">
-                                ${currentGame.name}
-                            </div>
-                            <div style="font-size: 0.9em; color: #666;">
-                                <div>${translations[currentLanguage].players}: ${currentGame.players.length}</div>
-                                <div>${translations[currentLanguage].buyIn}: ₪${totalBuyIn.toFixed(2)}</div>
-                                <div>${translations[currentLanguage].rebuys}: ₪${totalRebuys.toFixed(2)}</div>
-                                <div>${translations[currentLanguage].totalInPlay}: ₪${totalInPlay.toFixed(2)}</div>
-                                <div>${translations[currentLanguage].finalChips}: ₪${totalFinalChips.toFixed(2)}</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div style="background-color: #e8f5e9; padding: 15px; border-radius: 8px; border: 1px solid #c8e6c9;">
-                        <h3 style="color: #2e7d32; margin-bottom: 15px; text-align: center;">
-                            <i class="fas fa-chart-pie" style="margin-right: 8px;"></i>Game Summary
-                        </h3>
-                        <div style="background-color: white; padding: 12px; margin-bottom: 15px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                                <div style="text-align: center;">
-                                    <div style="font-size: 1.2em; color: #2e7d32; margin-bottom: 5px;">
-                                        Total Wins
-                                    </div>
-                                    <div style="font-size: 1.5em; font-weight: bold; color: #2e7d32;">
-                                        ₪${winners.reduce((sum, p) => sum + (p.finalChips - (p.buyIn + p.rebuys)), 0).toFixed(2)}
-                                    </div>
-                                    <div style="font-size: 0.9em; color: #666;">
-                                        ${winners.length} Winners
-                                    </div>
-                                </div>
-                                <div style="text-align: center;">
-                                    <div style="font-size: 1.2em; color: #c62828; margin-bottom: 5px;">
-                                        Total Losses
-                                    </div>
-                                    <div style="font-size: 1.5em; font-weight: bold; color: #c62828;">
-                                        ₪${losers.reduce((sum, p) => sum + Math.abs(p.finalChips - (p.buyIn + p.rebuys)), 0).toFixed(2)}
-                                    </div>
-                                    <div style="font-size: 0.9em; color: #666;">
-                                        ${losers.length} Losers
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-                            <div>
-                                <h4 style="color: #2e7d32; margin-bottom: 10px; text-align: center;">
-                                    <i class="fas fa-trophy" style="margin-right: 8px;"></i>${translations[currentLanguage].winners}
-                                </h4>
-                                ${sortedWinners.map(p => `
-                                    <div style="background-color: white; padding: 12px; margin-bottom: 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                                        <div style="font-weight: bold; color: #2e7d32; margin-bottom: 5px;">
-                                            ${p.name}
-                                        </div>
-                                        <div style="font-size: 1.2em; color: #2e7d32; margin-bottom: 5px;">
-                                            +₪${(p.finalChips - (p.buyIn + p.rebuys)).toFixed(2)}
-                                        </div>
-                                        <div style="font-size: 0.9em; color: #666;">
-                                            <div>${translations[currentLanguage].buyIn}: ₪${p.buyIn.toFixed(2)}</div>
-                                            <div>${translations[currentLanguage].rebuys}: ₪${p.rebuys.toFixed(2)}</div>
-                                            <div>${translations[currentLanguage].finalChips}: ₪${p.finalChips.toFixed(2)}</div>
-                                            <div style="font-weight: bold; color: #2e7d32;">Total Win: ₪${(p.finalChips - (p.buyIn + p.rebuys)).toFixed(2)}</div>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                            <div>
-                                <h4 style="color: #c62828; margin-bottom: 10px; text-align: center;">
-                                    <i class="fas fa-exclamation-circle" style="margin-right: 8px;"></i>${translations[currentLanguage].losers}
-                                </h4>
-                                ${sortedLosers.map(p => `
-                                    <div style="background-color: white; padding: 12px; margin-bottom: 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                                        <div style="font-weight: bold; color: #c62828; margin-bottom: 5px;">
-                                            ${p.name}
-                                        </div>
-                                        <div style="font-size: 1.2em; color: #c62828; margin-bottom: 5px;">
-                                            -₪${Math.abs(p.finalChips - (p.buyIn + p.rebuys)).toFixed(2)}
-                                        </div>
-                                        <div style="font-size: 0.9em; color: #666;">
-                                            <div>${translations[currentLanguage].buyIn}: ₪${p.buyIn.toFixed(2)}</div>
-                                            <div>${translations[currentLanguage].rebuys}: ₪${p.rebuys.toFixed(2)}</div>
-                                            <div>${translations[currentLanguage].finalChips}: ₪${p.finalChips.toFixed(2)}</div>
-                                            <div style="font-weight: bold; color: #c62828;">Total Loss: ₪${Math.abs(p.finalChips - (p.buyIn + p.rebuys)).toFixed(2)}</div>
-                                        </div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div>
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="color: #333;">${translations[currentLanguage].settlement}</h3>
-                    <div style="display: flex; gap: 10px;">
-                        <button class="btn" onclick="copySettlementInstructions()" style="background-color: #6c757d;">
-                            <i class="fas fa-copy"></i> ${translations[currentLanguage].copySettlement}
-                        </button>
-                        <button class="btn" onclick="captureSettlementSnapshot()" style="background-color: #28a745;">
-                            <i class="fas fa-camera"></i> ${translations[currentLanguage].captureSnapshot}
-                        </button>
-                    </div>
-                </div>
-                ${settlements.length === 0 
-                    ? `<p style="text-align: center; color: #666; padding: 15px; background-color: #f8f9fa; border-radius: 6px;">${translations[currentLanguage].noSettlements}</p>`
-                    : settlements.map(s => `
-                        <div class="settlement-item" style="background-color: white; padding: 12px; margin-bottom: 10px; border-radius: 6px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-                            <span class="from-name" style="font-weight: bold; color: #c62828;">${s.from}</span> 
-                            ${translations[currentLanguage].paysTo} 
-                            <span class="to-name" style="font-weight: bold; color: #2e7d32;">${s.to}</span>: 
-                            <span class="amount" style="font-weight: bold; color: #333;">₪${s.amount}</span>
-                        </div>
-                    `).join('')}
-            </div>
-        `;
-
-        console.log('Settlement calculation completed successfully');
-    } catch (error) {
-        console.error('Error in calculateSettlement:', error);
-        showTab('settlement');
-        const container = document.getElementById('settlementResults');
-        container.innerHTML = `
-            <div class="error" style="color: red; padding: 15px; background-color: #ffebee; border-radius: 6px;">
-                <strong>Error:</strong> ${error.message}<br>
-                Please check your data and try again.
-            </div>
-        `;
-    }
-}
-
-// Add to translations
-translations.en.captureSnapshot = 'Capture Snapshot';
-translations.he.captureSnapshot = 'צלם תמונה';
-
 // Make sure all functions are properly exposed to the global scope
 window.initializeApp = initializeApp;
 window.loadData = loadData;
@@ -1903,4 +1898,242 @@ function updateGameManagement() {
     `;
 }
 
+// ... existing code ...
+
+// Add new function for quick rebuy
+function quickRebuy(playerId, amount) {
+    const player = currentGame.players.find(p => p.playerId === playerId);
+    if (player) {
+        player.rebuys.push(amount);
+        saveData();
+        updateUI();
+    }
+}
+
+function captureSettlementSnapshot() {
+    try {
+        // Get the settlement results container
+        const container = document.getElementById('settlementResults');
+        
+        // Use html2canvas library to capture the screenshot
+        html2canvas(container, {
+            scale: 2, // Higher scale for better quality
+            useCORS: true,
+            logging: false,
+            backgroundColor: '#ffffff'
+        }).then(canvas => {
+            // Convert canvas to blob
+            canvas.toBlob(blob => {
+                // Create download link
+                const link = document.createElement('a');
+                link.download = `poker_settlement_${new Date().toISOString().split('T')[0]}.png`;
+                link.href = URL.createObjectURL(blob);
+                link.click();
+                
+                // Clean up
+                URL.revokeObjectURL(link.href);
+            }, 'image/png');
+        });
+    } catch (error) {
+        console.error('Error capturing screenshot:', error);
+        alert('Error capturing screenshot. Please try again.');
+    }
+}
+
+function exportGameStats() {
+    try {
+        // Get the current player filter
+        const playerFilter = document.getElementById('playerFilter');
+        const selectedPlayerId = playerFilter.value;
+        
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Prepare data for export
+        const exportData = [];
+        const headers = ['Player Name', 'Game Name', 'Game Score', 'Total Investment', 'Total Win', 'Balance'];
+        
+        // Add headers
+        exportData.push(headers);
+        
+        // Process each game in history
+        gameHistory.forEach(game => {
+            game.players.forEach(player => {
+                // Skip if player filter is active and this isn't the selected player
+                if (selectedPlayerId && player.playerId !== selectedPlayerId) {
+                    return;
+                }
+
+                const totalInvestment = player.buyIn + player.rebuys.reduce((sum, rebuy) => sum + rebuy, 0);
+                const gameScore = player.finalChips - totalInvestment;
+                const totalWin = Math.max(0, gameScore);
+                
+                exportData.push([
+                    player.name,
+                    game.name,
+                    gameScore,
+                    totalInvestment,
+                    totalWin,
+                    gameScore
+                ]);
+            });
+        });
+
+        // Create worksheet
+        const ws = XLSX.utils.aoa_to_sheet(exportData);
+        
+        // Add worksheet to workbook
+        XLSX.utils.book_append_sheet(wb, ws, 'Game Statistics');
+        
+        // Generate file name
+        const fileName = selectedPlayerId 
+            ? `poker_stats_${players.find(p => p.id === selectedPlayerId).name}_${new Date().toISOString().split('T')[0]}.xlsx`
+            : `poker_stats_all_players_${new Date().toISOString().split('T')[0]}.xlsx`;
+        
+        // Save file
+        XLSX.writeFile(wb, fileName);
+        
+        alert('Game statistics exported successfully!');
+    } catch (error) {
+        console.error('Error exporting game statistics:', error);
+        alert('Error exporting game statistics. Please try again.');
+    }
+}
+
+function importGameStats(event) {
+    try {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                
+                // Get the first worksheet
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                
+                // Skip header row
+                const stats = jsonData.slice(1);
+                
+                // Process imported data
+                stats.forEach(row => {
+                    const [playerName, gameName, gameScore, totalInvestment, totalWin, balance] = row;
+                    
+                    // Find or create player
+                    let player = players.find(p => p.name === playerName);
+                    if (!player) {
+                        player = {
+                            id: Date.now().toString(),
+                            name: playerName
+                        };
+                        players.push(player);
+                    }
+                    
+                    // Find or create game
+                    let game = gameHistory.find(g => g.name === gameName);
+                    if (!game) {
+                        game = {
+                            name: gameName,
+                            date: new Date().toISOString(),
+                            isActive: false,
+                            players: []
+                        };
+                        gameHistory.push(game);
+                    }
+                    
+                    // Update player's game data
+                    const playerInGame = game.players.find(p => p.playerId === player.id);
+                    if (!playerInGame) {
+                        game.players.push({
+                            playerId: player.id,
+                            name: playerName,
+                            buyIn: totalInvestment,
+                            rebuys: [],
+                            finalChips: totalInvestment + gameScore
+                        });
+                    }
+                });
+                
+                // Save the updated data
+                saveData();
+                
+                // Update the UI
+                updateUI();
+                
+                alert('Game statistics imported successfully!');
+            } catch (error) {
+                console.error('Error processing imported file:', error);
+                alert('Error processing imported file. Please check the file format.');
+            }
+        };
+        
+        reader.readAsArrayBuffer(file);
+    } catch (error) {
+        console.error('Error importing game statistics:', error);
+        alert('Error importing game statistics. Please try again.');
+    } finally {
+        // Reset file input
+        event.target.value = '';
+    }
+}
+
+// ... existing code ...
+
+// Add new function for saving game to Excel
+function saveGameToExcel(gameId) {
+    try {
+        const game = gameHistory.find(g => g.date === gameId);
+        if (!game) {
+            alert('Game not found');
+            return;
+        }
+
+        // Create workbook
+        const wb = XLSX.utils.book_new();
+        
+        // Prepare data for export
+        const exportData = [
+            ['Game Name', game.name],
+            ['Date', new Date(game.date).toLocaleString()],
+            [''],
+            ['Player Name', 'Buy-in', 'Rebuys', 'Total Investment', 'Final Chips', 'Net Result']
+        ];
+
+        // Add player data
+        game.players.forEach(player => {
+            const totalRebuys = player.rebuys.reduce((sum, rebuy) => sum + rebuy, 0);
+            const totalInvestment = player.buyIn + totalRebuys;
+            const netResult = player.finalChips - totalInvestment;
+            
+            exportData.push([
+                player.name,
+                player.buyIn,
+                totalRebuys,
+                totalInvestment,
+                player.finalChips,
+                netResult
+            ]);
+        });
+
+        // Create worksheet
+        const ws = XLSX.utils.aoa_to_sheet(exportData);
+        
+        // Add worksheet to workbook
+        XLSX.utils.book_append_sheet(wb, ws, 'Game Details');
+        
+        // Generate file name
+        const fileName = `poker_game_${game.name.replace(/[^a-z0-9]/gi, '_')}_${new Date(game.date).toISOString().split('T')[0]}.xlsx`;
+        
+        // Save file
+        XLSX.writeFile(wb, fileName);
+        
+        alert('Game saved to Excel successfully!');
+    } catch (error) {
+        console.error('Error saving game to Excel:', error);
+        alert('Error saving game to Excel. Please try again.');
+    }
+}
 // ... existing code ...
