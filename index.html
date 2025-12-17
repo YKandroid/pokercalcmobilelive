@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
+    <meta name="theme-color" content="#007bff">
+    <meta name="description" content="Poker Game Calc2 - Track player buy-ins, rebuys, and calculate settlements">
+    <link rel="manifest" href="/manifest.json">
+    <link rel="apple-touch-icon" href="/icon-192x192.png">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <title>Poker Game Calc2</title>
+    <style>
+        :root {
+            --background-color: #f0f2f5; /* Light theme background */
+            --text-color: #333; /* Light theme text color */
+            --button-background: #007bff; /* Light theme button background */
+            --button-hover-background: #0056b3; /* Light theme button hover */
+            --heading-color: #007bff; /* Light theme heading color */
+            --error-color: red; /* Error text color */
+            --input-text-color: #333;
+            --select-text-color: #333;
+        }
+
+        [data-theme="dark"] {
+            --background-color: #333; /* Dark theme background */
+            --text-color: #f0f2f5; /* Dark theme text color */
+            --button-background: #0056b3; /* Dark theme button background */
+            --button-hover-background: #007bff; /* Dark theme button hover */
+            --heading-color: #f0f2f5; /* Dark theme heading color */
+            --error-color: #ffcc00; /* Dark theme error color */
+            --input-text-color: #f0f2f5;
+            --select-text-color: #f0f2f5;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            position: relative; /* Position relative for overlay */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5); /* Semi-transparent overlay */
+            z-index: -1; /* Place behind content */
+        }
+        body[dir="rtl"] {
+            font-family: "Arial Hebrew", Arial, sans-serif;
+        }
+        .container {
+            background-color: var(--background-color);
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .section {
+            margin-bottom: 20px;
+            padding: 15px;
+            border: 1px solid var(--text-color);
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        .btn {
+            padding: 8px 16px;
+            background-color: var(--button-background);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            transition: background-color 0.2s ease, transform 0.1s ease;
+            font-weight: 500;
+        }
+        .btn:hover {
+            background-color: var(--button-hover-background);
+        }
+        .btn:active {
+            transform: scale(0.98);
+        }
+        @media (hover: none) {
+            .btn:hover {
+                background-color: var(--button-background);
+            }
+        }
+        .player-list {
+            margin: 10px 0;
+        }
+        .player-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid var(--text-color);
+            margin: 5px 0;
+            border-radius: 6px;
+            background-color: var(--background-color);
+            transition: box-shadow 0.2s ease;
+        }
+        .player-item:hover {
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .input-group {
+            margin: 10px 0;
+        }
+        .input-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .input-group input {
+            padding: 10px 12px;
+            border: 1px solid var(--text-color);
+            border-radius: 6px;
+            width: 200px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: var(--button-background);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+        .input-group select {
+            padding: 10px 12px;
+            border: 1px solid var(--text-color);
+            border-radius: 6px;
+            width: 200px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            cursor: pointer;
+            min-height: 100px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .input-group select:focus {
+            outline: none;
+            border-color: var(--button-background);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
+        .input-group select option {
+            padding: 8px;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            cursor: pointer;
+        }
+        .input-group select option:hover {
+            background-color: var(--button-background);
+            color: white;
+        }
+        .input-group select option:checked {
+            background-color: var(--button-background);
+            color: white;
+            font-weight: bold;
+        }
+        .input-group select option:checked:hover {
+            background-color: var(--button-hover-background);
+            color: white;
+        }
+        .input-group select:focus {
+            outline: none;
+            border-color: var(--button-background);
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+        }
+        .tab {
+            display: none;
+        }
+        .tab.active {
+            display: block;
+        }
+        .tab-buttons {
+            margin-bottom: 20px;
+        }
+        .settlement-item {
+            background-color: var(--background-color);
+            padding: 10px;
+            margin: 5px 0;
+            border-radius: 4px;
+        }
+        .error {
+            color: var(--error-color);
+            margin: 5px 0;
+        }
+        .game-history-item {
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid var(--text-color);
+            border-radius: 4px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .game-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .game-name-input {
+            margin-bottom: 10px;
+        }
+        .language-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+        }
+        body[dir="rtl"] .language-toggle {
+            right: auto;
+            left: 20px;
+        }
+
+        /* Safe area support for notched devices (iPhone X and newer, Android with notches) */
+        @supports (padding: max(0px)) {
+            body {
+                padding-left: max(10px, env(safe-area-inset-left));
+                padding-right: max(10px, env(safe-area-inset-right));
+                padding-top: max(10px, env(safe-area-inset-top));
+                padding-bottom: max(10px, env(safe-area-inset-bottom));
+            }
+        }
+
+        /* Tablet and iPad styles (768px - 1024px) */
+        @media screen and (min-width: 768px) and (max-width: 1024px) {
+            /* Table display for tablets */
+            table {
+                display: table;
+                width: 100%;
+                font-size: 0.95em;
+            }
+
+            table thead {
+                display: table-header-group;
+            }
+
+            table tbody {
+                display: table-row-group;
+            }
+
+            table tbody tr {
+                display: table-row;
+            }
+
+            table tbody td {
+                display: table-cell;
+                padding: 10px;
+                border: 1px solid var(--text-color);
+            }
+
+            table tbody td:before {
+                display: none;
+            }
+            body {
+                padding: 15px;
+                font-size: 15px;
+            }
+
+            .container {
+                padding: 15px;
+                max-width: 100%;
+            }
+
+            /* Tab buttons for tablets */
+            .tab-buttons {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 8px;
+                margin-bottom: 20px;
+            }
+
+            .tab-buttons .btn {
+                flex: 1 1 calc(33.333% - 8px);
+                padding: 12px 8px;
+                font-size: 0.95em;
+                min-height: 48px;
+            }
+
+            /* Two-column layouts for tablets */
+            #gameManagementContent > div {
+                grid-template-columns: 1fr 1fr !important;
+                gap: 20px !important;
+            }
+
+            #settlementResults > div {
+                grid-template-columns: 1fr 1fr !important;
+                gap: 20px !important;
+            }
+
+            #settlementSummary > div {
+                grid-template-columns: 1fr 1fr !important;
+            }
+
+            /* Player items for tablets */
+            .player-item {
+                flex-direction: row;
+                justify-content: space-between;
+                padding: 15px;
+            }
+
+            .player-item > div:first-child {
+                flex: 1;
+            }
+
+            .player-item > div:last-child {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+
+            .player-item .btn {
+                width: auto;
+                min-width: 100px;
+            }
+
+            /* Input groups for tablets */
+            .input-group {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                gap: 10px;
+            }
+
+            .input-group label {
+                min-width: 150px;
+                margin-bottom: 0;
+            }
+
+            .input-group input,
+            .input-group select {
+                flex: 1;
+                max-width: 300px;
+            }
+
+            /* Game history items for tablets */
+            .game-history-item {
+                flex-direction: row;
+                justify-content: space-between;
+                padding: 15px;
+            }
+
+            .game-actions {
+                display: flex;
+                gap: 8px;
+                width: auto;
+            }
+
+            /* Chip count inputs for tablets */
+            #chipCountInputs .input-group > div {
+                flex-direction: row;
+                align-items: center;
+            }
+
+            #chipCountInputs input[type="number"] {
+                width: 150px !important;
+            }
+
+            /* Improved touch targets for tablets */
+            button, 
+            input[type="button"],
+            input[type="submit"],
+            input[type="reset"] {
+                min-height: 48px;
+                padding: 12px 16px;
+            }
+
+            input[type="text"],
+            input[type="number"],
+            select {
+                min-height: 48px;
+                padding: 10px 14px;
+            }
+
+            /* App header adjustments */
+            .app-header {
+                flex-direction: row;
+                justify-content: space-between;
+                align-items: center;
+            }
+
+            .app-logo-container {
+                width: 250px;
+                height: 120px;
+            }
+
+            .theme-buttons {
+                position: relative;
+                display: flex;
+                gap: 10px;
+            }
+
+            .language-toggle {
+                position: relative;
+                top: auto;
+                right: auto;
+            }
+        }
+
+        /* Mobile phones (up to 767px) */
+        @media screen and (max-width: 767px) {
+            body {
+                padding: 10px;
+                padding-left: max(10px, env(safe-area-inset-left));
+                padding-right: max(10px, env(safe-area-inset-right));
+                padding-top: max(10px, env(safe-area-inset-top));
+                padding-bottom: max(10px, env(safe-area-inset-bottom));
+                font-size: 14px;
+            }
+
+            .container {
+                padding: 10px;
+                margin: 0;
+                max-width: 100%;
+            }
+
+            /* Tab buttons adjustments */
+            .tab-buttons {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 5px;
+                margin-bottom: 15px;
+                position: sticky;
+                top: 0;
+                background: var(--background-color);
+                z-index: 100;
+                padding: 10px 0;
+                margin-left: -10px;
+                margin-right: -10px;
+                padding-left: max(10px, env(safe-area-inset-left));
+                padding-right: max(10px, env(safe-area-inset-right));
+            }
+
+            .tab-buttons .btn {
+                flex: 1 1 calc(50% - 5px);
+                padding: 12px 8px;
+                font-size: 0.9em;
+                margin: 0;
+                white-space: nowrap;
+                text-align: center;
+                min-height: 48px;
+            }
+
+            /* Input groups */
+            .input-group {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+
+            .input-group label {
+                margin-bottom: 5px;
+            }
+
+            .input-group input,
+            .input-group select {
+                width: 100%;
+                max-width: none;
+                box-sizing: border-box;
+            }
+
+            /* Player items */
+            .player-item {
+                flex-direction: column;
+                gap: 10px;
+                padding: 12px;
+            }
+
+            .player-item > div {
+                width: 100%;
+            }
+
+            .player-item .btn {
+                width: 100%;
+                margin: 4px 0;
+            }
+
+            /* Game management layout */
+            #gameManagementContent > div {
+                grid-template-columns: 1fr !important;
+                gap: 15px !important;
+            }
+
+            /* Settlement display */
+            #settlementResults > div {
+                grid-template-columns: 1fr !important;
+            }
+
+            .settlement-item {
+                font-size: 0.9em;
+                padding: 12px;
+                word-break: break-word;
+            }
+
+            /* Game history items */
+            .game-history-item {
+                flex-direction: column;
+                gap: 10px;
+                padding: 12px;
+            }
+
+            .game-actions {
+                width: 100%;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+            }
+
+            .game-actions .btn {
+                width: 100%;
+            }
+
+            /* Language toggle adjustment */
+            .language-toggle {
+                position: fixed;
+                top: max(10px, env(safe-area-inset-top));
+                right: max(10px, env(safe-area-inset-right));
+                z-index: 1000;
+                padding: 8px 12px;
+                font-size: 0.9em;
+                min-height: 44px;
+            }
+
+            body[dir="rtl"] .language-toggle {
+                right: auto;
+                left: max(10px, env(safe-area-inset-left));
+            }
+
+            /* Theme toggle button */
+            #themeToggle {
+                position: fixed;
+                top: max(10px, env(safe-area-inset-top));
+                left: max(10px, env(safe-area-inset-left));
+                z-index: 1000;
+                padding: 8px 12px;
+                min-height: 44px;
+            }
+
+            body[dir="rtl"] #themeToggle {
+                left: auto;
+                right: max(10px, env(safe-area-inset-right));
+            }
+
+            /* App header for mobile */
+            .app-header {
+                flex-direction: column;
+                gap: 15px;
+                margin-top: 50px;
+            }
+
+            .app-logo-container {
+                width: 100%;
+                max-width: 300px;
+                height: auto;
+                min-height: 80px;
+            }
+
+            .theme-buttons {
+                position: relative;
+                width: 100%;
+                display: flex;
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            .theme-buttons .btn {
+                width: 100%;
+            }
+
+            /* Chip count inputs */
+            #chipCountInputs .input-group > div {
+                flex-direction: column;
+                align-items: flex-start !important;
+                gap: 8px;
+            }
+
+            #chipCountInputs input[type="number"] {
+                width: 100% !important;
+            }
+
+            /* Settlement summary adjustments */
+            #settlementSummary > div {
+                grid-template-columns: 1fr !important;
+                gap: 15px !important;
+            }
+
+            /* Button groups */
+            div[style*="display: flex; gap: 10px;"] {
+                flex-direction: column;
+                gap: 10px;
+            }
+
+            div[style*="display: flex; gap: 10px;"] .btn {
+                width: 100%;
+            }
+
+            /* Game stats display */
+            div[style*="display: grid; grid-template-columns: 1fr 1fr;"] {
+                grid-template-columns: 1fr !important;
+            }
+
+            /* Improved touch targets */
+            button, 
+            input[type="button"],
+            input[type="submit"],
+            input[type="reset"],
+            .btn {
+                min-height: 48px;
+                touch-action: manipulation;
+                -webkit-tap-highlight-color: rgba(0, 123, 255, 0.3);
+                padding: 12px 16px;
+            }
+
+            /* Better spacing for touch inputs */
+            input[type="text"],
+            input[type="number"],
+            input[type="color"],
+            select {
+                min-height: 48px;
+                padding: 12px 14px;
+                font-size: 16px; /* Prevents zoom on iOS */
+                -webkit-appearance: none;
+                appearance: none;
+                border-radius: 6px;
+            }
+
+            /* Improved table display for mobile */
+            table {
+                display: block;
+                width: 100%;
+                overflow-x: auto;
+                -webkit-overflow-scrolling: touch;
+                font-size: 0.9em;
+            }
+
+            table thead {
+                display: none;
+            }
+
+            table tbody {
+                display: block;
+            }
+
+            table tbody tr {
+                display: block;
+                margin-bottom: 15px;
+                border: 1px solid var(--text-color);
+                border-radius: 6px;
+                padding: 12px;
+                background-color: var(--background-color);
+            }
+
+            table tbody td {
+                display: block;
+                padding: 8px 0;
+                border: none;
+                text-align: left;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+            }
+
+            table tbody td:last-child {
+                border-bottom: none;
+            }
+
+            table tbody td:before {
+                content: attr(data-label);
+                font-weight: bold;
+                display: inline-block;
+                min-width: 120px;
+                margin-right: 10px;
+            }
+
+            /* For tables without data-label, show column headers */
+            table tbody td:nth-child(1):before { content: "Player Name: "; }
+            table tbody td:nth-child(2):before { content: "Game Name: "; }
+            table tbody td:nth-child(3):before { content: "Game Score: "; }
+            table tbody td:nth-child(4):before { content: "Total Investment: "; }
+            table tbody td:nth-child(5):before { content: "Total Win: "; }
+            table tbody td:nth-child(6):before { content: "Balance: "; }
+
+            /* Modal adjustments for mobile */
+            .modal-content {
+                width: 95%;
+                margin: 20px auto;
+                max-height: 90vh;
+                overflow-y: auto;
+            }
+
+            /* Improved scrolling */
+            * {
+                -webkit-overflow-scrolling: touch;
+            }
+
+            /* Font size adjustments */
+            h1 { 
+                font-size: 1.5em; 
+                margin-top: 10px;
+                margin-bottom: 15px;
+            }
+            h2 { 
+                font-size: 1.3em; 
+                margin-top: 15px;
+                margin-bottom: 10px;
+            }
+            h3 { 
+                font-size: 1.2em; 
+                margin-top: 10px;
+                margin-bottom: 8px;
+            }
+
+            /* Section spacing */
+            .section {
+                padding: 15px;
+                margin-bottom: 15px;
+            }
+
+            /* Select multiple styling */
+            select[multiple] {
+                min-height: 120px;
+                max-height: 200px;
+            }
+
+            /* Better scrollbar styling for mobile */
+            ::-webkit-scrollbar {
+                width: 8px;
+                height: 8px;
+            }
+
+            ::-webkit-scrollbar-track {
+                background: var(--background-color);
+            }
+
+            ::-webkit-scrollbar-thumb {
+                background: var(--button-background);
+                border-radius: 4px;
+            }
+
+            ::-webkit-scrollbar-thumb:hover {
+                background: var(--button-hover-background);
+            }
+
+            /* Color picker */
+            input[type="color"] {
+                width: 100%;
+                height: 60px;
+                padding: 5px;
+                border-radius: 6px;
+            }
+
+            /* Text color picker label */
+            label[for="textColorPicker"] {
+                display: block;
+                margin-bottom: 10px;
+                font-weight: bold;
+            }
+
+            /* Card view on mobile */
+            .game-players-cards {
+                grid-template-columns: 1fr !important;
+                gap: 12px;
+            }
+
+            .player-card {
+                padding: 12px;
+            }
+
+            .player-card .btn {
+                width: 100%;
+                margin: 2px 0;
+            }
+
+            /* View toggle button on mobile */
+            div[style*="display: flex; justify-content: space-between"] {
+                flex-direction: column;
+                gap: 10px;
+                align-items: stretch !important;
+            }
+
+            div[style*="display: flex; justify-content: space-between"] button {
+                width: 100%;
+            }
+        }
+
+        /* Additional improvements for very small screens */
+        @media screen and (max-width: 360px) {
+            body {
+                font-size: 13px;
+            }
+
+            .btn {
+                padding: 10px 12px;
+                font-size: 0.85em;
+            }
+
+            .container {
+                padding: 8px;
+            }
+
+            .tab-buttons .btn {
+                font-size: 0.8em;
+                padding: 10px 5px;
+            }
+
+            h1 { font-size: 1.3em; }
+            h2 { font-size: 1.1em; }
+            h3 { font-size: 1em; }
+        }
+
+        /* Landscape orientation adjustments for mobile */
+        @media screen and (max-height: 500px) and (orientation: landscape) and (max-width: 767px) {
+            body {
+                padding: 5px;
+            }
+
+            .container {
+                max-height: 90vh;
+                overflow-y: auto;
+                padding: 8px;
+            }
+
+            .tab-buttons {
+                position: sticky;
+                top: 0;
+                background: var(--background-color);
+                z-index: 100;
+                padding: 5px 0;
+            }
+
+            .tab-buttons .btn {
+                padding: 8px 5px;
+                font-size: 0.8em;
+                min-height: 40px;
+            }
+
+            .app-header {
+                margin-top: 40px;
+            }
+
+            .app-logo-container {
+                height: 60px;
+            }
+
+            h1 {
+                font-size: 1.2em;
+                margin: 5px 0;
+            }
+
+            .section {
+                padding: 10px;
+                margin-bottom: 10px;
+            }
+        }
+
+        /* Landscape orientation for tablets */
+        @media screen and (min-width: 768px) and (max-width: 1024px) and (orientation: landscape) {
+            .tab-buttons .btn {
+                flex: 1 1 calc(20% - 8px);
+            }
+
+            #gameManagementContent > div,
+            #settlementResults > div {
+                grid-template-columns: 1fr 1fr !important;
+            }
+        }
+
+        h1, h2, h3 {
+            color: var(--heading-color);
+        }
+
+        /* Add new styles for app header and logo */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        
+        .app-logo-container {
+            width: 200px;
+            height: 100px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            border-radius: 8px;
+        }
+        
+        #appLogo {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+        
+        .theme-buttons {
+            position: absolute;
+            right: 0;
+            top: 0;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Update text color for all text elements */
+        body, 
+        input, 
+        select, 
+        button,
+        label,
+        .player-item,
+        .settlement-item,
+        .game-history-item,
+        #gameNameDisplay,
+        #settlementSummary,
+        .input-group input::placeholder {
+            color: var(--text-color);
+        }
+
+        /* Update specific element styles */
+        .container {
+            background-color: var(--background-color);
+            color: var(--text-color);
+        }
+
+        input[type="text"],
+        input[type="number"],
+        select {
+            background-color: var(--background-color);
+            color: var(--input-text-color);
+            border: 1px solid var(--text-color);
+        }
+
+        select option {
+            background-color: var(--background-color);
+            color: var(--select-text-color);
+        }
+
+        .section {
+            background-color: var(--background-color);
+            border-color: var(--text-color);
+        }
+
+        .player-item,
+        .game-history-item {
+            background-color: var(--background-color);
+            border-color: var(--text-color);
+        }
+
+        .settlement-item {
+            background-color: var(--background-color);
+        }
+
+        #settlementSummary {
+            background-color: var(--background-color);
+        }
+
+        /* Card view styles for game players */
+        .game-players-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .player-card {
+            background-color: var(--background-color);
+            border: 2px solid var(--text-color);
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .player-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+
+        /* Responsive card view */
+        @media screen and (max-width: 767px) {
+            .game-players-cards {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .player-card {
+                padding: 12px;
+            }
+        }
+
+        @media screen and (min-width: 768px) and (max-width: 1024px) {
+            .game-players-cards {
+                grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+                gap: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <img id="backgroundImage" src="" alt="Background" style="display: none; position: absolute; top: 0; left: 0; right: 0; bottom: 0; object-fit: cover; z-index: -1;">
+        <button class="btn language-toggle" onclick="toggleLanguage()" id="languageToggle">עברית</button>
+        <button class="btn" id="themeToggle">Dark / Light</button>
+        
+        <!-- Add the app logo/image container -->
+        <div class="app-header">
+            <div class="app-logo-container">
+                <img id="appLogo" src="" alt="App Logo" style="display: none;">
+            </div>
+            <div class="theme-buttons">
+                <button class="btn" id="uploadThemeButton">Upload Theme Image</button>
+                <button class="btn" id="removeThemeButton" style="display: none;">Remove Theme Image</button>
+                <input type="file" id="themeImageInput" accept="image/*" style="display: none;">
+            </div>
+        </div>
+        
+        <h1>Poker Game Calc2</h1>
+        
+        <div class="tab-buttons">
+            <button class="btn" onclick="showTab('players')" id="playersTabBtn">Players</button>
+            <button class="btn" onclick="showTab('gameManagement')" id="gameManagementTabBtn">Game Management</button>
+            <button class="btn" onclick="showTab('game')" id="gameTabBtn">Game</button>
+            <button class="btn" onclick="showTab('settlement')" id="settlementTabBtn">Settlement</button>
+            <button class="btn" onclick="showTab('history')" id="historyTabBtn">Game History</button>
+        </div>
+
+        <!-- Players Tab -->
+        <div id="playersTab" class="tab">
+            <div class="section">
+                <h2 id="playerManagementTitle">Player Management</h2>
+                <div class="input-group">
+                    <label for="playerName" id="playerNameLabel">Player Name:</label>
+                    <input type="text" id="playerName" placeholder="Enter player name">
+                    <button class="btn" onclick="addPlayer()" id="addPlayerBtn">Add Player</button>
+                </div>
+                <div id="playersList" class="player-list"></div>
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <button class="btn" onclick="exportPlayersData()" style="background-color: #28a745;" id="exportPlayersBtn">Export Players</button>
+                    <button class="btn" onclick="document.getElementById('importFile').click()" style="background-color: #17a2b8;" id="importPlayersBtn">Import Players</button>
+                    <input type="file" id="importFile" accept=".csv,.xlsx,.xls" style="display: none;" onchange="importPlayersData(event)">
+                    <button class="btn" onclick="clearAppData()" style="background-color: #dc3545;" id="clearDataBtn">Clear App Data</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game Management Tab -->
+        <div id="gameManagementTab" class="tab">
+            <div class="section">
+                <h2 id="gameManagementTitle">Game Management</h2>
+                <div id="gameManagementContent"></div>
+            </div>
+        </div>
+
+        <!-- Game Tab -->
+        <div id="gameTab" class="tab">
+            <div class="section">
+                <h2 id="currentGameTitle">Current Game</h2>
+                <div id="currentGame">
+                    <h3 id="playersInGameTitle">Players in Game</h3>
+                    <div id="gameNameDisplay" style="margin-bottom: 15px; font-size: 1.2em; color: #333;"></div>
+                    <div id="gamePlayersList"></div>
+                    <div class="input-group">
+                        <label id="addPlayersLabel">Add Players to Game:</label>
+                        <select id="playerSelect" multiple size="5" style="width: 200px; margin-bottom: 10px;"></select>
+                        <input type="number" id="buyInAmount" placeholder="Buy-in amount (₪)">
+                        <button class="btn" onclick="addPlayerToGame()" id="addToGameBtn">Add to Game</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settlement Tab -->
+        <div id="settlementTab" class="tab">
+            <div class="section">
+                <h2 id="settlementTitle">Settlement</h2>
+                <div id="settlementSummary" style="margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 4px;"></div>
+                <div id="chipCountInputs"></div>
+                <div id="submitChipsContainer" style="margin: 20px 0; display: none;">
+                    <button class="btn" onclick="submitFinalChips()" style="background-color: #28a745;" id="submitChipsBtn">Submit Final Chips</button>
+                </div>
+                <div id="settlementResults"></div>
+            </div>
+        </div>
+
+        <!-- History Tab -->
+        <div id="historyTab" class="tab">
+            <div class="section">
+                <h2 id="gameHistoryTitle">Game History</h2>
+                <div id="gameHistoryList"></div>
+            </div>
+        </div>
+
+        <label for="textColorPicker">Select Text Color:</label>
+        <input type="color" id="textColorPicker" value="#333333" />
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        // Initialize the app when the page loads
+        window.onload = function() {
+            loadData();
+            showTab('gameManagement');
+            updateLanguageUI();
+        };
+
+        // Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful');
+                    })
+                    .catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+
+        function setBackgroundImage(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.getElementById('appLogo');
+                    img.src = e.target.result;
+                    img.style.display = 'block';
+                    document.getElementById('removeThemeButton').style.display = 'inline-block';
+                    
+                    // Save the image to localStorage
+                    localStorage.setItem('appLogo', e.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        
+        function removeThemeImage() {
+            const img = document.getElementById('appLogo');
+            img.src = '';
+            img.style.display = 'none';
+            document.getElementById('removeThemeButton').style.display = 'none';
+            localStorage.removeItem('appLogo');
+        }
+        
+        // Add event listeners
+        document.getElementById('uploadThemeButton').onclick = () => document.getElementById('themeImageInput').click();
+        document.getElementById('removeThemeButton').onclick = removeThemeImage;
+        document.getElementById('themeImageInput').onchange = setBackgroundImage;
+        
+        // Load saved image on page load
+        window.addEventListener('load', function() {
+            const savedLogo = localStorage.getItem('appLogo');
+            if (savedLogo) {
+                const img = document.getElementById('appLogo');
+                img.src = savedLogo;
+                img.style.display = 'block';
+                document.getElementById('removeThemeButton').style.display = 'inline-block';
+            }
+        });
+
+        // Add color picker functionality
+        document.getElementById('textColorPicker').addEventListener('change', function(e) {
+            const color = e.target.value;
+            document.documentElement.style.setProperty('--text-color', color);
+            document.documentElement.style.setProperty('--input-text-color', color);
+            document.documentElement.style.setProperty('--select-text-color', color);
+            
+            // Save the color preference
+            localStorage.setItem('textColor', color);
+        });
+
+        // Load saved color preference
+        window.addEventListener('load', function() {
+            const savedColor = localStorage.getItem('textColor');
+            if (savedColor) {
+                document.getElementById('textColorPicker').value = savedColor;
+                document.documentElement.style.setProperty('--text-color', savedColor);
+                document.documentElement.style.setProperty('--input-text-color', savedColor);
+                document.documentElement.style.setProperty('--select-text-color', savedColor);
+            }
+
+            // Load saved theme preference
+            const savedTheme = localStorage.getItem('theme');
+            if (savedTheme === 'dark') {
+                document.body.setAttribute('data-theme', 'dark');
+                document.getElementById('themeToggle').textContent = 'Light';
+            } else {
+                document.body.removeAttribute('data-theme');
+                document.getElementById('themeToggle').textContent = 'Dark';
+            }
+        });
+
+        // Add theme toggle functionality
+        document.getElementById('themeToggle').addEventListener('click', function() {
+            if (document.body.getAttribute('data-theme') === 'dark') {
+                document.body.removeAttribute('data-theme');
+                this.textContent = 'Dark';
+                localStorage.setItem('theme', 'light');
+            } else {
+                document.body.setAttribute('data-theme', 'dark');
+                this.textContent = 'Light';
+                localStorage.setItem('theme', 'dark');
+            }
+        });
+    </script>
+</body>
+</html> 
